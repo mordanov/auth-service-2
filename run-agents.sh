@@ -411,7 +411,9 @@ while [[ "$PA_READY" == "false" && $WAIT_SECONDS -lt $MAX_WAIT ]]; do
     # The project-administrator broadcasts payload.type == "pa-ready".
     SIGNAL=$(npx --prefix ~/.local/share/brainstorm-mcp brainstorm-messages \
                "$PROJECT_NAME" 2>/dev/null \
-             | grep -c '"pa-ready"' 2>/dev/null || echo "0")
+              | grep -c '"pa-ready"' 2>/dev/null || true)
+    SIGNAL=$(printf '%s\n' "$SIGNAL" | tail -n 1)
+    [[ "$SIGNAL" =~ ^[0-9]+$ ]] || SIGNAL=0
     if [[ "$SIGNAL" -gt 0 ]]; then
       PA_READY=true
     fi
