@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-PROJECT_NAME="portuguese-expenses"
+PROJECT_NAME="auth-app"
 
 role_to_filename() {
   local role="$1"
