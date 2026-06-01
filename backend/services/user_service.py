@@ -7,7 +7,7 @@ from repositories.token_repository import TokenRepository
 from schemas.user import UserCreate, AppAccessItem
 
 
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_pwd_ctx = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 
 class UserService:

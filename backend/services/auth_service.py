@@ -7,7 +7,7 @@ from repositories.user_repository import UserRepository
 from repositories.log_repository import LogRepository
 from services.token_service import TokenService
 
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_pwd_ctx = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 # Pre-computed hash used for constant-time dummy verification when user not found.
 # Prevents timing side-channels that enable username enumeration.

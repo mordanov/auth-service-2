@@ -7,7 +7,7 @@ from db.database import Base
 from models.user import User, UserAppAccess, PROTECTED_APPS
 from config import settings
 
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_pwd_ctx = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 
 async def seed():
