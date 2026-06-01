@@ -14,12 +14,12 @@ def _make_user(
     email: str = "alice@example.com",
     role: str = "user",
 ) -> User:
-    from passlib.context import CryptContext
+    from services.pwd import hash_password
     return User(
         id=uuid.uuid4(),
         username=username,
         email=email,
-        password_hash=CryptContext(schemes=["bcrypt"], deprecated="auto").hash(password),
+        password_hash=hash_password(password),
         is_active=is_active,
         role=role,
         google_id=None,

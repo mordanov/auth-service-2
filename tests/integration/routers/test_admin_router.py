@@ -1,11 +1,9 @@
 import uuid
 import pytest
-from passlib.context import CryptContext
 
 from tests.conftest import make_user, make_token, make_app_access
 from models.user import PROTECTED_APPS
-
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from services.pwd import hash_password
 _admin_counter = 0
 
 
@@ -17,7 +15,7 @@ async def _admin_client(client, db):
     await make_user(
         db,
         username=username,
-        password_hash=_pwd.hash("adminpw"),
+        password_hash=hash_password("adminpw"),
         role="admin",
     )
     await db.commit()
@@ -28,7 +26,7 @@ async def _admin_client(client, db):
 
 class TestAdminAuthorization:
     async def test_non_admin_request_returns_403(self, client, db):
-        await make_user(db, username="plain_user", password_hash=_pwd.hash("pw"), role="user")
+        await make_user(db, username="plain_user", password_hash=hash_password("pw"), role="user")
         await db.commit()
 
         login = await client.post("/api/auth/login", json={"username": "plain_user", "password": "pw"})
@@ -83,7 +81,7 @@ class TestBlockUser:
         cookies = await _admin_client(client, db)
 
         # Create a regular user with a token
-        target = await make_user(db, username="to_block", password_hash=_pwd.hash("pw"))
+        target = await make_user(db, username="to_block", password_hash=hash_password("pw"))
         token = await make_token(db, target.id)
         await db.commit()
 

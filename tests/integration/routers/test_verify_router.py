@@ -1,17 +1,15 @@
 import secrets
 import pytest
 from datetime import datetime, timedelta
-from passlib.context import CryptContext
 
 from tests.conftest import make_user, make_token, make_app_access
 from models.token import AuthToken
-
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from services.pwd import hash_password
 
 
 class TestVerifyTokenEndpoint:
     async def test_valid_cookie_returns_200_with_correct_fields(self, client, db):
-        user = await make_user(db, username="verify_ok", password_hash=_pwd.hash("pw"))
+        user = await make_user(db, username="verify_ok", password_hash=hash_password("pw"))
         await make_app_access(db, user.id, enabled_apps=["budget-site", "reminders-app"])
         token = await make_token(db, user.id)
         await db.commit()

@@ -1,11 +1,9 @@
 """OAuth route integration tests using mocked OAuth providers."""
 import pytest
 from unittest.mock import AsyncMock, patch
-from passlib.context import CryptContext
 
 from tests.conftest import make_user
-
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from services.pwd import hash_password
 
 
 class TestGoogleAuthRoute:
@@ -213,35 +211,32 @@ class TestST012TimingNormalization:
     """ST-012: unknown-user and wrong-password paths both call bcrypt verify."""
 
     async def test_unknown_user_still_calls_dummy_bcrypt(self, db):
-        """_DUMMY_HASH verify is called even when user does not exist."""
-        from services.auth_service import AuthService, _pwd_ctx
-        from unittest.mock import patch as mpatch
+        """verify_password is called even when user does not exist (timing normalization)."""
+        from services.auth_service import AuthService
+        from unittest.mock import patch as mpatch, AsyncMock
+        import services.pwd as pwd_module
 
         verify_calls = []
+        original_verify = pwd_module.verify_password
 
-        original_verify = _pwd_ctx.verify
+        def capturing_verify(password, hashed):
+            verify_calls.append(hashed)
+            return original_verify(password, hashed)
 
-        def capturing_verify(password, hash_val):
-            verify_calls.append(hash_val)
-            return original_verify(password, hash_val)
+        mock_user_repo = AsyncMock()
+        mock_user_repo.get_by_username.return_value = None
+        mock_log_repo = AsyncMock()
+        mock_log_repo.create = AsyncMock()
+        mock_db = AsyncMock()
 
-        with mpatch.object(_pwd_ctx, "verify", side_effect=capturing_verify):
-            mock_user_repo = __import__("unittest.mock", fromlist=["AsyncMock"]).AsyncMock()
-            mock_user_repo.get_by_username.return_value = None
-            mock_log_repo = __import__("unittest.mock", fromlist=["AsyncMock"]).AsyncMock()
-            mock_log_repo.create = __import__("unittest.mock", fromlist=["AsyncMock"]).AsyncMock()
-            mock_db = __import__("unittest.mock", fromlist=["AsyncMock"]).AsyncMock()
-
-            with __import__("unittest.mock", fromlist=["patch"]).patch(
-                "services.auth_service.UserRepository", return_value=mock_user_repo
-            ), __import__("unittest.mock", fromlist=["patch"]).patch(
-                "services.auth_service.LogRepository", return_value=mock_log_repo
-            ):
-                token, reason = await AuthService.login("nobody", "password", mock_db)
+        with mpatch.object(pwd_module, "verify_password", side_effect=capturing_verify), \
+             mpatch.patch("services.auth_service.UserRepository", return_value=mock_user_repo), \
+             mpatch.patch("services.auth_service.LogRepository", return_value=mock_log_repo):
+            token, reason = await AuthService.login("nobody", "password", mock_db)
 
         assert token is None
         assert reason == "invalid_credentials"
-        assert len(verify_calls) >= 1, "Expected at least one bcrypt.verify() call for timing normalization"
+        assert len(verify_calls) >= 1, "Expected at least one verify_password() call for timing normalization"
 
 
 _redir_counter = 0
@@ -252,9 +247,7 @@ class TestOpenRedirectProtection:
         global _redir_counter
         _redir_counter += 1
         username = f"redir_safe_{_redir_counter}"
-        from passlib.context import CryptContext
-        pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        await make_user(db, username=username, password_hash=pwd.hash("pw"))
+        await make_user(db, username=username, password_hash=hash_password("pw"))
         await db.commit()
 
         resp = await client.post(
@@ -269,9 +262,7 @@ class TestOpenRedirectProtection:
         global _redir_counter
         _redir_counter += 1
         username = f"redir_unsafe_{_redir_counter}"
-        from passlib.context import CryptContext
-        pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        await make_user(db, username=username, password_hash=pwd.hash("pw"))
+        await make_user(db, username=username, password_hash=hash_password("pw"))
         await db.commit()
 
         resp = await client.post(
