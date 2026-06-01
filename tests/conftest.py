@@ -95,9 +95,9 @@ async def make_user(
     is_active: bool = True,
     email: str | None = None,
 ) -> User:
-    from passlib.context import CryptContext
     if password_hash is None:
-        password_hash = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto").hash("password")
+        from services.pwd import hash_password
+        password_hash = hash_password("password")
     user = User(
         id=uuid.uuid4(),
         username=username,

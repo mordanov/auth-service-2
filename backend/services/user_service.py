@@ -1,13 +1,10 @@
-from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User, UserAppAccess, PROTECTED_APPS
 from repositories.user_repository import UserRepository
 from repositories.token_repository import TokenRepository
 from schemas.user import UserCreate, AppAccessItem
-
-
-_pwd_ctx = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
+from services.pwd import hash_password
 
 
 class UserService:
@@ -24,7 +21,7 @@ class UserService:
             if existing_email:
                 raise ValueError("email already exists")
 
-        password_hash = _pwd_ctx.hash(data.password)
+        password_hash = hash_password(data.password)
         user = User(
             username=data.username,
             email=data.email if data.email else None,

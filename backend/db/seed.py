@@ -1,13 +1,11 @@
 import asyncio
-from passlib.context import CryptContext
 from sqlalchemy import select
 
 from db.database import AsyncSessionLocal, engine
 from db.database import Base
 from models.user import User, UserAppAccess, PROTECTED_APPS
 from config import settings
-
-_pwd_ctx = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
+from services.pwd import hash_password
 
 
 async def seed():
@@ -23,7 +21,7 @@ async def seed():
             users_to_seed.append(
                 User(
                     username=settings.ADMIN_USERNAME,
-                    password_hash=_pwd_ctx.hash(settings.ADMIN_PASSWORD),
+                    password_hash=hash_password(settings.ADMIN_PASSWORD),
                     role="admin",
                     is_active=True,
                 )
@@ -33,7 +31,7 @@ async def seed():
             users_to_seed.append(
                 User(
                     username=settings.USER1_USERNAME,
-                    password_hash=_pwd_ctx.hash(settings.USER1_PASSWORD),
+                    password_hash=hash_password(settings.USER1_PASSWORD),
                     role="user",
                     is_active=True,
                 )
@@ -43,7 +41,7 @@ async def seed():
             users_to_seed.append(
                 User(
                     username=settings.USER2_USERNAME,
-                    password_hash=_pwd_ctx.hash(settings.USER2_PASSWORD),
+                    password_hash=hash_password(settings.USER2_PASSWORD),
                     role="user",
                     is_active=True,
                 )

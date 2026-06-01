@@ -1,4 +1,3 @@
-from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Request
 
@@ -6,12 +5,11 @@ from models.log import AuthLog
 from repositories.user_repository import UserRepository
 from repositories.log_repository import LogRepository
 from services.token_service import TokenService
-
-_pwd_ctx = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
+from services.pwd import hash_password, verify_password
 
 # Pre-computed hash used for constant-time dummy verification when user not found.
 # Prevents timing side-channels that enable username enumeration.
-_DUMMY_HASH = _pwd_ctx.hash("__dummy__")
+_DUMMY_HASH = hash_password("__dummy__")
 
 
 def _get_ip(request: Request | None) -> str | None:
@@ -38,7 +36,7 @@ class AuthService:
         if user is None or user.password_hash is None:
             # Always run bcrypt verify to normalise response time regardless of
             # whether the username exists, preventing timing-based enumeration.
-            _pwd_ctx.verify(password, _DUMMY_HASH)
+            verify_password(password, _DUMMY_HASH)
             await log_repo.create(
                 AuthLog(
                     username=username,
@@ -51,7 +49,7 @@ class AuthService:
             await db.commit()
             return None, "invalid_credentials"
 
-        if not _pwd_ctx.verify(password, user.password_hash):
+        if not verify_password(password, user.password_hash):
             await log_repo.create(
                 AuthLog(
                     username=username,
