@@ -5,6 +5,14 @@ on:
     branches: [main, "001-*"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
@@ -12,30 +20,12 @@ jobs:
     name: Backend Tests (Python 3.12)
     runs-on: ubuntu-latest
 
-    # Tests use in-memory SQLite via conftest.py — no database service needed.
-    env:
-      DATABASE_URL: sqlite+aiosqlite:///:memory:
-      TOKEN_TTL_HOURS: "24"
-      SECRET_KEY: "ci_test_secret_key_replace_in_production_abcdef0123456789"
-      ADMIN_USERNAME: admin
-      ADMIN_PASSWORD: admin_test_pass
-      USER1_USERNAME: user1
-      USER1_PASSWORD: user1_test_pass
-      USER2_USERNAME: user2
-      USER2_PASSWORD: user2_test_pass
-      GOOGLE_CLIENT_ID: "ci-placeholder"
-      GOOGLE_CLIENT_SECRET: "ci-placeholder"
-      GOOGLE_REDIRECT_URI: "https://auth.mainpage.com/api/auth/callback/google"
-      GITHUB_CLIENT_ID: "ci-placeholder"
-      GITHUB_CLIENT_SECRET: "ci-placeholder"
-      GITHUB_REDIRECT_URI: "https://auth.mainpage.com/api/auth/callback/github"
-      AUTH_APP_URL: "https://auth.mainpage.com"
-      COOKIE_DOMAIN: ".mainpage.com"
-      ENVIRONMENT: "development"
-      ALLOWED_ORIGINS: "https://auth.mainpage.com"
+    # conftest.py sets DATABASE_URL and SECRET_KEY via os.environ.setdefault before any
+    # backend module loads. All other Settings fields have defaults. No env block needed.
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -48,11 +38,8 @@ jobs:
         working-directory: backend
         run: pip install -r requirements.txt
 
-      # Tests use in-memory SQLite (conftest.py), so no migration needed in CI.
-      # Alembic upgrade head is verified separately in the deploy job against the real DB.
-
+      # pytest.ini is at repo root: testpaths=tests, pythonpath=backend
       - name: Run tests with coverage
-        # pytest.ini is at repo root: testpaths=tests, pythonpath=backend
         run: pytest --cov=backend --cov-report=xml --cov-report=term-missing --cov-fail-under=80 -v
 
       - name: Upload coverage report
@@ -65,23 +52,25 @@ jobs:
   test-frontend:
     name: Frontend Tests (Node LTS)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        working-directory: frontend
         run: npm ci
 
       - name: Run tests with coverage
-        working-directory: frontend
         run: npm run test:coverage
 
       - name: Upload coverage report
@@ -91,101 +80,169 @@ jobs:
           path: frontend/coverage/
 
   # ────────────────────────────────────────────────────────────────────────────
-  build-and-deploy:
-    name: Build & Deploy
+  deploy:
+    name: Deploy to VPS
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
-      - name: Verify production environment config
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -e
-            cd /opt/auth-app
-            # ENVIRONMENT=production is required so cookies are Secure
-            ENV_VAL=$(grep -E '^ENVIRONMENT=' .env | cut -d= -f2 | tr -d '[:space:]')
-            if [ "$ENV_VAL" != "production" ]; then
-              echo "ERROR: .env must set ENVIRONMENT=production for deployed instances (got: '$ENV_VAL')" >&2
-              exit 1
+      - name: Deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT || 22 }}
+          VPS_AUTH_DIR: ${{ secrets.VPS_AUTH_DIR }}
+          VPS_WEB_FOLDERS_DIR: ${{ secrets.VPS_WEB_FOLDERS_DIR }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
+            "bash -se -- '$REPO' '$REF_NAME' '$VPS_AUTH_DIR' '$VPS_WEB_FOLDERS_DIR'" << 'EOF'
+
+          set -e
+
+          REPO="$1"
+          REF_NAME="$2"
+          AUTH_DIR="${3:-$HOME/auth-app}"
+          WEB_FOLDERS_DIR="${4:-$HOME/web-folders}"
+
+          PREVIOUS_COMMIT=""
+
+          # --- Update auth-app repo ---
+          mkdir -p "$AUTH_DIR"
+          cd "$AUTH_DIR"
+
+          if [ ! -d .git ]; then
+            git clone "https://github.com/$REPO.git" .
+          fi
+
+          PREVIOUS_COMMIT=$(git rev-parse HEAD || echo "")
+
+          git fetch origin --prune
+          git checkout "$REF_NAME"
+          git reset --hard "origin/$REF_NAME"
+
+          # --- Update web-folders infra repo ---
+          if [ ! -d "$WEB_FOLDERS_DIR/.git" ]; then
+            echo "web-folders repo is missing at $WEB_FOLDERS_DIR"
+            echo "Clone web-folders on VPS once, then rerun deployment"
+            exit 1
+          fi
+
+          cd "$WEB_FOLDERS_DIR"
+          git fetch origin --prune
+
+          if git show-ref --verify --quiet refs/remotes/origin/main; then
+            git checkout main
+            git reset --hard origin/main
+          else
+            git pull --ff-only
+          fi
+
+          # --- Sanity-check that auth services exist in this compose config ---
+          if ! docker compose config --services | grep -qx "auth-backend"; then
+            echo "web-folders config is missing auth-backend service"
+            echo "Ensure web-folders docker-compose.yaml defines auth-backend and auth-frontend"
+            exit 1
+          fi
+
+          AUTH_HTTP_HOST="${AUTH_PRIMARY_DOMAIN:-auth.mainpage.com}"
+
+          debug_dump() {
+            docker compose ps || true
+            docker compose logs --no-color --tail=200 auth-backend || true
+            docker compose logs --no-color --tail=200 auth-frontend || true
+            docker compose logs --no-color --tail=200 nginx || true
+          }
+
+          wait_for_auth_health() {
+            local retries=60
+            local delay=2
+
+            echo "Waiting for auth service via nginx (Host: ${AUTH_HTTP_HOST})..."
+            for ((i=1; i<=retries; i++)); do
+              if curl -fsS -H "Host: ${AUTH_HTTP_HOST}" http://localhost/health > /dev/null 2>&1; then
+                echo "Health check passed"
+                return 0
+              fi
+              sleep "$delay"
+            done
+
+            echo "Health check failed after $((retries * delay))s"
+            return 1
+          }
+
+          # --- Build images ---
+          echo "Building containers..."
+          docker compose build auth-backend auth-frontend nginx
+
+          # --- Apply database migrations before switching traffic ---
+          echo "Running database migrations..."
+          docker compose run --rm auth-backend alembic upgrade head
+
+          # --- Start services ---
+          docker compose up -d --remove-orphans
+
+          if ! wait_for_auth_health; then
+            echo "Health check failed -> rollback"
+            debug_dump
+
+            if [ -n "$PREVIOUS_COMMIT" ]; then
+              cd "$AUTH_DIR"
+              git reset --hard "$PREVIOUS_COMMIT"
+              cd "$WEB_FOLDERS_DIR"
+              docker compose build auth-backend auth-frontend nginx
+              docker compose up -d --remove-orphans
+
+              if wait_for_auth_health; then
+                echo "Rollback recovered service successfully"
+              else
+                echo "Rollback completed, but service is still unhealthy"
+                debug_dump
+              fi
             fi
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+            exit 1
+          fi
 
-      - name: Log in to Docker registry
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          docker compose ps
+          EOF
 
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/auth-app-backend:${{ github.sha }},${{ secrets.DOCKER_USERNAME }}/auth-app-backend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/auth-app-frontend:${{ github.sha }},${{ secrets.DOCKER_USERNAME }}/auth-app-frontend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -e
-            cd /opt/auth-app
-
-            # Pull latest images
-            docker pull ${{ secrets.DOCKER_USERNAME }}/auth-app-backend:latest
-            docker pull ${{ secrets.DOCKER_USERNAME }}/auth-app-frontend:latest
-
-            # Apply database migrations before starting new containers
-            docker run --rm \
-              --network web-folders_default \
-              --env-file .env \
-              ${{ secrets.DOCKER_USERNAME }}/auth-app-backend:latest \
-              alembic upgrade head
-
-            # Restart services
-            docker compose up -d --no-build
-
-            # Health check
-            sleep 5
-            curl -f https://auth.mainpage.com/health || (docker compose logs auth-app-backend && exit 1)
-
-      - name: Notify deployment complete
+      - name: Deploy notification
         if: success()
-        run: echo "Deployment of ${{ github.sha }} to auth.mainpage.com succeeded."
+        run: echo "Deployment to ${{ secrets.VPS_HOST }} completed successfully."
+
+      - name: Deploy failed notification
+        if: failure()
+        run: echo "Deployment failed."
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Required GitHub Secrets (Settings → Secrets and variables → Actions):
 #
-#   DEPLOY_SSH_KEY        — Private SSH key for deployment server access
-#   DEPLOY_HOST           — Deployment server hostname or IP
-#   DEPLOY_USER           — SSH username on deployment server
-#   DOCKER_USERNAME       — Docker registry username
-#   DOCKER_PASSWORD       — Docker registry password / token
+#   VPS_SSH_KEY           — Private SSH key for deployment server access
+#   VPS_HOST              — Deployment server hostname or IP
+#   VPS_USER              — SSH username on deployment server
+#   VPS_PORT              — SSH port (default: 22)
+#   VPS_AUTH_DIR          — Path to auth-app repo on VPS (e.g. /opt/auth-app)
+#   VPS_WEB_FOLDERS_DIR   — Path to web-folders repo on VPS (e.g. /opt/web-folders)
 #
-# Sensitive runtime secrets (injected via .env on the server, NOT stored in CI):
-#   SECRET_KEY, DATABASE_URL, ADMIN_PASSWORD, USER*_PASSWORD
-#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-#   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
+# All runtime secrets live in web-folders/.env on the VPS (AUTH_* prefix):
+#   AUTH_POSTGRES_DB, AUTH_POSTGRES_USER, AUTH_POSTGRES_PASSWORD
+#   AUTH_SECRET_KEY
+#   AUTH_ADMIN_USERNAME, AUTH_ADMIN_PASSWORD
+#   AUTH_USER1_USERNAME, AUTH_USER1_PASSWORD
+#   AUTH_USER2_USERNAME, AUTH_USER2_PASSWORD
+#   AUTH_GOOGLE_CLIENT_ID, AUTH_GOOGLE_CLIENT_SECRET
+#   AUTH_GITHUB_CLIENT_ID, AUTH_GITHUB_CLIENT_SECRET
+#   AUTH_PRIMARY_DOMAIN, AUTH_SERVER_NAMES
+#   AUTH_COOKIE_DOMAIN, AUTH_ALLOWED_ORIGINS
 # ──────────────────────────────────────────────────────────────────────────────
