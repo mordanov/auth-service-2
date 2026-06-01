@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  auth-app-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: auth-app-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    networks:
+      - web-folders_default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  auth-app-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: auth-app-frontend
+    restart: unless-stopped
+    networks:
+      - web-folders_default
+    depends_on:
+      auth-app-backend:
+        condition: service_healthy
+
+networks:
+  web-folders_default:
+    external: true

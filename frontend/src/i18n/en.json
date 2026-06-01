@@ -1,0 +1,66 @@
+{
+  "login": {
+    "title": "Sign In",
+    "tabPassword": "Sign in with password",
+    "tabGoogle": "Google",
+    "tabGithub": "GitHub",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign In",
+    "error_invalid_credentials": "Invalid username or password",
+    "error_forbidden": "Access denied. Your account is blocked or email is not registered.",
+    "error_unknown": "An error occurred. Please try again.",
+    "google_button": "Sign in with Google",
+    "github_button": "Sign in with GitHub",
+    "username_placeholder": "Enter username",
+    "password_placeholder": "Enter password"
+  },
+  "admin": {
+    "title": "Admin Panel",
+    "create_user": "Create User",
+    "users_table": "Users",
+    "col_username": "Username",
+    "col_email": "Email",
+    "col_role": "Role",
+    "col_status": "Status",
+    "col_actions": "Actions",
+    "status_active": "Active",
+    "status_blocked": "Blocked",
+    "btn_block": "Block",
+    "btn_unblock": "Unblock",
+    "btn_app_access": "App Access",
+    "modal_create_title": "New User",
+    "modal_username": "Username",
+    "modal_email": "Email (optional)",
+    "modal_password": "Password",
+    "modal_submit": "Create",
+    "modal_cancel": "Cancel",
+    "error_username_required": "Username is required",
+    "error_password_required": "Password is required",
+    "error_conflict": "A user with that username or email already exists",
+    "error_unknown": "An error occurred",
+    "apps_title": "Application Access",
+    "apps_save": "Save",
+    "loading": "Loading...",
+    "error_forbidden": "Access Denied"
+  },
+  "app": {
+    "logout": "Sign Out",
+    "loading": "Loading...",
+    "error_access_denied": "Access Denied"
+  },
+  "lang": {
+    "ru": "RU",
+    "en": "EN"
+  },
+  "apps": {
+    "budget-site": "Budget Site",
+    "family-admin-routine": "Family Admin Routine",
+    "family-archive": "Family Archive",
+    "family-kitchen-recipes": "Kitchen Recipes",
+    "new-site": "New Site",
+    "portuguese-expenses": "Portuguese Expenses",
+    "reminders-app": "Reminders",
+    "servinga-dashboard": "Servinga Dashboard"
+  }
+}

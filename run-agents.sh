@@ -396,7 +396,7 @@ echo ""
 # Poll the Brainstorm project for the pa-ready message.
 # We use the brainstorm MCP CLI wrapper if available; otherwise fall back to
 # a plain time-based wait so the script still works without the CLI tool.
-PA_READY=false
+PA_READY=${PA_READY:-false}
 WAIT_SECONDS=0
 MAX_WAIT=300   # 5 minutes hard limit
 
@@ -416,6 +416,12 @@ while [[ "$PA_READY" == "false" && $WAIT_SECONDS -lt $MAX_WAIT ]]; do
     [[ "$SIGNAL" =~ ^[0-9]+$ ]] || SIGNAL=0
     if [[ "$SIGNAL" -gt 0 ]]; then
       PA_READY=true
+    else
+      # brainstorm-messages CLI not available or returned nothing — fall back.
+      if [[ $WAIT_SECONDS -ge 30 ]]; then
+        echo "  (brainstorm-messages CLI unavailable; assuming PA ready after ${WAIT_SECONDS}s)"
+        PA_READY=true
+      fi
     fi
   else
     # No CLI available — fall back to a fixed wait after which we assume PA is up.
