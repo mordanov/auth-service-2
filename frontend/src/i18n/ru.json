@@ -1,0 +1,66 @@
+{
+  "login": {
+    "title": "Вход",
+    "tabPassword": "Войти с паролем",
+    "tabGoogle": "Google",
+    "tabGithub": "GitHub",
+    "username": "Имя пользователя",
+    "password": "Пароль",
+    "submit": "Войти",
+    "error_invalid_credentials": "Неверное имя пользователя или пароль",
+    "error_forbidden": "Доступ запрещён. Ваш аккаунт заблокирован или email не зарегистрирован.",
+    "error_unknown": "Произошла ошибка. Попробуйте ещё раз.",
+    "google_button": "Войти через Google",
+    "github_button": "Войти через GitHub",
+    "username_placeholder": "Введите имя пользователя",
+    "password_placeholder": "Введите пароль"
+  },
+  "admin": {
+    "title": "Панель администратора",
+    "create_user": "Создать пользователя",
+    "users_table": "Пользователи",
+    "col_username": "Имя пользователя",
+    "col_email": "Email",
+    "col_role": "Роль",
+    "col_status": "Статус",
+    "col_actions": "Действия",
+    "status_active": "Активен",
+    "status_blocked": "Заблокирован",
+    "btn_block": "Заблокировать",
+    "btn_unblock": "Разблокировать",
+    "btn_app_access": "Доступ к приложениям",
+    "modal_create_title": "Новый пользователь",
+    "modal_username": "Имя пользователя",
+    "modal_email": "Email (необязательно)",
+    "modal_password": "Пароль",
+    "modal_submit": "Создать",
+    "modal_cancel": "Отмена",
+    "error_username_required": "Имя пользователя обязательно",
+    "error_password_required": "Пароль обязателен",
+    "error_conflict": "Пользователь с таким именем или email уже существует",
+    "error_unknown": "Произошла ошибка",
+    "apps_title": "Доступ к приложениям",
+    "apps_save": "Сохранить",
+    "loading": "Загрузка...",
+    "error_forbidden": "Доступ запрещён"
+  },
+  "app": {
+    "logout": "Выйти",
+    "loading": "Загрузка...",
+    "error_access_denied": "Доступ запрещён"
+  },
+  "lang": {
+    "ru": "РУ",
+    "en": "EN"
+  },
+  "apps": {
+    "budget-site": "Budget Site",
+    "family-admin-routine": "Family Admin Routine",
+    "family-archive": "Family Archive",
+    "family-kitchen-recipes": "Kitchen Recipes",
+    "new-site": "New Site",
+    "portuguese-expenses": "Portuguese Expenses",
+    "reminders-app": "Reminders",
+    "servinga-dashboard": "Servinga Dashboard"
+  }
+}
