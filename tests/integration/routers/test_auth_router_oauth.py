@@ -230,8 +230,8 @@ class TestST012TimingNormalization:
         mock_db = AsyncMock()
 
         with mpatch.object(pwd_module, "verify_password", side_effect=capturing_verify), \
-             mpatch.patch("services.auth_service.UserRepository", return_value=mock_user_repo), \
-             mpatch.patch("services.auth_service.LogRepository", return_value=mock_log_repo):
+             mpatch("services.auth_service.UserRepository", return_value=mock_user_repo), \
+             mpatch("services.auth_service.LogRepository", return_value=mock_log_repo):
             token, reason = await AuthService.login("nobody", "password", mock_db)
 
         assert token is None
