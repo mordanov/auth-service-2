@@ -214,14 +214,12 @@ class TestST012TimingNormalization:
         """verify_password is called even when user does not exist (timing normalization)."""
         from services.auth_service import AuthService
         from unittest.mock import patch as mpatch, AsyncMock
-        import services.pwd as pwd_module
 
         verify_calls = []
-        original_verify = pwd_module.verify_password
 
         def capturing_verify(password, hashed):
             verify_calls.append(hashed)
-            return original_verify(password, hashed)
+            return True
 
         mock_user_repo = AsyncMock()
         mock_user_repo.get_by_username.return_value = None
@@ -229,7 +227,7 @@ class TestST012TimingNormalization:
         mock_log_repo.create = AsyncMock()
         mock_db = AsyncMock()
 
-        with mpatch.object(pwd_module, "verify_password", side_effect=capturing_verify), \
+        with mpatch("services.auth_service.verify_password", side_effect=capturing_verify), \
              mpatch("services.auth_service.UserRepository", return_value=mock_user_repo), \
              mpatch("services.auth_service.LogRepository", return_value=mock_log_repo):
             token, reason = await AuthService.login("nobody", "password", mock_db)
